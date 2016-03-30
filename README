@@ -2,4 +2,5 @@ This program is my modification on largely mostly code by Ethan Miller and
 Daryll Long from University of California Santa Cruz. This program can encrypt
 and decrypt a file. It also includes a freeBSD system call that generates 2 random
 keys using SHA1 to set to a user’s uchred. This also means that in freeBSD the 
-uchred struct needs to be modified by adding 2 variables, one for each key. This is to be used to encrypt and decrypt files uniquely for the given user.
+uchred struct needs to be modified by adding 2 variables, one for each key. 
+This is to be used to encrypt and decrypt files uniquely for the given user.
