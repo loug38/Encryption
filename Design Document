@@ -1,0 +1,87 @@
+Design Document
+
+CryptoFS
+	Overall plan:
+		Make protectfile
+		Make setkey systemcall
+		Make program to set userkey
+		Find how to make cryptofs
+		Attach encryption/decryption to layer
+		mount cryptofs
+
+
+Implementing CryptoFS
+	To be able to use mount -t cryptofs dir1 dir2
+		Files altered to get cryptofs to be recognized are:
+		/sys/fs/ 
+			Added folder cryptofs folder with identical files to nullfs but with changed variables for new call
+		/sys/kern/Make.tags.inc 
+			Added ${SYS}/fs/cryptofs/*.[ch] \
+		/sys/modules 
+			Added folder cryptofs which contained one Makefile
+		/sbin 
+			Added mount_cryptofs folder which contains a similar files to mount_nullfs' folders with changed variables.
+		/sbin/mount/mount.c 
+			Added "cryptofs" into accepted parameters for mount function
+		/sbin/Makefile 
+			Added the new mount_cryptofs to makefile
+	These alterations allowed me to mount cryptofs layer ontop of a directory to allow encryption implementation
+	To be able to encrypt the information:
+		Add crypto_write in cryptofs/crypto_vnops.c
+			This function will be incharge of intercepting writes to the disk, and encrypting the messages.
+			This will check if the sticky bit is set, and if it is, encrypt the data. 
+			It uses ucrred->k0 and ucred->k1 for a 64 bit key. 
+			If the sticky bit is on it calls bufferEncryption algorithm to encrypt teh data.
+			After doing so, it will simply call crypto_bypass and bypass the information to a lower layer.
+
+		Add crypto_read in cryptofs/crypto_vnops.c
+			This function will be incharge of intercepting reads from disk, and decrypting the messages.
+			This will check if the sticky bit is set, and if it is, decrypt the data. 
+			It will then call crypto_bypass to go read the data from the disk, and store it into a buffer.
+			Next, it must decrypt the data.
+			It does so by reading the ap->a_uio->uio_iov->iov_base and passing it to the bufferEncryption function. 
+			This function has a problem, and I've spoken to Aneesh and Prof. about it. 
+			The problem revolves arount the buffer. I am able to intercept the buffer as it's being passed up 
+			 through the layers, and reaches cryptoFS. The problem is that the buffer is being used and the 
+			 information is being displayed, even before crypto_read or crypto_bypass finish. Aneeshinformed me that the problem is extremely complex, and he doesn't know how to do it. Since he told me this part is worth 5 points total, I thought I would leave it as is.
+		Add bufferEncryption in cryptofs/crypto_vnops.c
+			This is a descendant of the readyForEncryption function in the sample by Darrell. 
+			The main change being made here is that instead of opening a file, I will read the next 16 chars from a buffer instead. Other things are pretty much the same.
+		Create a mapping for crypto_read and crypto_write
+			Do so by adding two new lines to the crypto_vnodeops struct
+				.vop_read =			crypto_read,
+				.vop_write = 		crypto_write,
+		Add rijndael.h to sys/fs/cryptofs
+			This file is the same one as the one provided in Professor Long's example and our protectfile
+		Add rijndael.h to sys/fs/cryptofs
+			This file is the same one as the one provided in Professor Long's example and our protectfile
+
+
+
+Implementation of setkey systemcall:
+	Add a sys_setkey.c file to sys/kern
+	Add k0 and k1 to ucred for user keys
+	Add the system call to syscalls.master 546 AUE_NULL STD { int setkey(unsigned int k0, unsigned int k1); }
+	run make sysent to make build the rest of the headers and etc.
+	sys_setkey.c to sys/conf/files
+	use syscall(546, unsigned int k0, unsigned int k0);
+
+Write protectfile:
+	You must be in root to run this, setting the sticky bit to 1, requires you to have root access.
+	In usr/asgn4
+	take in arguments as specified in specs.
+	break key into 2 parts
+	Check sticky bit, if 1 decrypt if 0 encrypt
+	if encrypting
+		encrypt via AES given.
+		mode |= S_ISTXT <- set sticky bit to 1
+		chmod (file, mode) <- set it on the file
+	if decrypting 
+		mode &= ~S_ISTXT;  <- set sticky bit to 0
+	    chmod (file, mode); <- set it on the file
+	    decrypt via AES given
+
+	Set user key program:
+		call for a passphrase, SHA1 it, and split it into 2 keys. Use systemcall to set the keys
+
+
